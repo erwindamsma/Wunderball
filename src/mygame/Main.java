@@ -2,7 +2,9 @@ package mygame;
 
 import com.jme3.app.SimpleApplication;
 import com.jme3.bullet.BulletAppState;
+import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.control.RigidBodyControl;
+import com.jme3.bullet.util.CollisionShapeFactory;
 import com.jme3.font.BitmapText;
 import com.jme3.input.ChaseCamera;
 import com.jme3.input.KeyInput;
@@ -14,41 +16,46 @@ import com.jme3.math.ColorRGBA;
 import com.jme3.math.FastMath;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
+import com.jme3.niftygui.NiftyJmeDisplay;
 import com.jme3.renderer.RenderManager;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.scene.shape.Sphere;
 import com.jme3.system.AppSettings;
+import de.lessvoid.nifty.Nifty;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * test
- * @author normenhansen
- */
 public class Main extends SimpleApplication implements ActionListener {
     
     public static final Quaternion PITCH270 = new Quaternion().fromAngleAxis(FastMath.PI*3/2, new Vector3f(1,0,0));
+    
     private BulletAppState bulletAppState;
-    
-    BitmapText hudText;
-    
+    private Nifty nifty;
+    private BitmapText hudText;
     private ChaseCamera chaseCam;
     
-    Ball ball;
-    RigidBodyControl rigidBall;
+    private Ball ball;
+    private RigidBodyControl rigidBall;
+    private Finish finish;
+    
+    private List<Coin> coins = new ArrayList<>();
     
     private boolean rightBtn = false;
     private boolean leftBtn = false;
     private boolean upBtn = false;
     private boolean downBtn = false;
     
-    private int failCounter = 0;
+    private Player player;
+    
+    private static final int ballSpeed = 10;
     
     public static void main(String[] args) {
         Main app = new Main();
         AppSettings s = new AppSettings(true);
-        s.setFullscreen(true);
-        s.setWidth(1920);
-        s.setHeight(1080);
+        s.setFullscreen(false);
+        s.setWidth(1366);
+        s.setHeight(768);
         s.setFrameRate(60);
         s.setSamples(2); //antialiasing
         app.setSettings(s);
@@ -60,9 +67,13 @@ public class Main extends SimpleApplication implements ActionListener {
     public void simpleInitApp() {
         bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
+        flyCam.setEnabled(false);
+        player = new Player("", this);
         
-        setUpLight();
-        setUpSkyDome();
+        NiftyJmeDisplay niftyDisplay = new NiftyJmeDisplay(assetManager, inputManager, audioRenderer, viewPort);
+        nifty = niftyDisplay.getNifty();
+        nifty.fromXml("Interface/screen.xml", "start", new MyStartScreen(this, nifty));
+        guiViewPort.addProcessor(niftyDisplay);
         
         Node parcour = new Parcour(assetManager);
         RigidBodyControl rigidParcour = new RigidBodyControl(0);
@@ -70,56 +81,37 @@ public class Main extends SimpleApplication implements ActionListener {
         rootNode.attachChild(parcour);
         bulletAppState.getPhysicsSpace().add(rigidParcour);
         
-        ball = new Ball(assetManager, BallChoice.Basketball);
-        ball.setLocalTranslation(0, 2, 0);
-        rigidBall = new RigidBodyControl(5);
+        rigidBall = new RigidBodyControl(new SphereCollisionShape(0.3f));
+        rigidBall.setDamping(0.5f, 0.5f);
+        ball = new Ball(assetManager, this);
+        ball.setLocalTranslation(0, 1, 0);
         ball.addControl(rigidBall);
-        rootNode.attachChild(ball);
-        bulletAppState.getPhysicsSpace().add(rigidBall);
         
-        flyCam.setEnabled(false);
-        
-        chaseCam = new ChaseCamera(cam, ball, this.inputManager);
-        chaseCam.setDefaultDistance(5);
-        chaseCam.setMinDistance(3);
-        chaseCam.setMaxDistance(10);
-        chaseCam.setDefaultHorizontalRotation((float)(90 * Math.PI / 180));
-        chaseCam.setDragToRotate(false);
-        chaseCam.setInvertVerticalAxis(true);
-        
-        initKeys();
-        
-        hudText = new BitmapText(guiFont, false);          
-        hudText.setSize(guiFont.getCharSet().getRenderedSize());      // font size
-        hudText.setColor(ColorRGBA.Blue);                             // font color
-        hudText.setText("You can write any string here");             // the text
-        hudText.setLocalTranslation(300, hudText.getLineHeight(), 0); // position
-        guiNode.attachChild(hudText);
+        finish = new Finish(assetManager);
+        finish.setLocalTranslation(0, 0.5f, -5);
+        rootNode.attachChild(finish);
+
+        initLight();
+        initSkySphere();
+        initChaseCam();
+        addCoins();
     }
 
     @Override
     public void simpleUpdate(float tpf) {
-        double rotation = (float)(this.chaseCam.getHorizontalRotation() / Math.PI * 180) - 90;
+        double rotation = this.chaseCam.getHorizontalRotation();
         
-        hudText.setText(String.valueOf(Math.abs(rotation % 360)) + " ==> x: " + Math.sin(rotation) * 20 + " z: " + Math.cos(rotation) * 20);
+        float x = (float)(Math.cos(rotation) * ballSpeed);
+        float y = (float)(Math.sin(rotation) * ballSpeed);
         
+        if (rightBtn) rigidBall.applyCentralForce(new Vector3f(y,0,-x));
+        if (leftBtn) rigidBall.applyCentralForce(new Vector3f(-y,0,x));
+        if (upBtn) rigidBall.applyCentralForce(new Vector3f(-x,0,-y));
+        if (downBtn) rigidBall.applyCentralForce(new Vector3f(x,0,y));
         
-        
-        if(rightBtn){
-            rigidBall.applyCentralForce(new Vector3f(20,0,0));
-        }
-        if (leftBtn){
-            rigidBall.applyCentralForce(new Vector3f(-20,0,0));
-        }
-        if (upBtn){
-            rigidBall.applyCentralForce(new Vector3f(0,0,-20));
-        }
-        if (downBtn){
-            rigidBall.applyCentralForce(new Vector3f(0,0,20));
-        }
-        
-        this.inputManager.setCursorVisible(false);
         checkUserDropped();
+        finishedReached();
+        checkCoins(tpf);
     }
 
     @Override
@@ -127,7 +119,7 @@ public class Main extends SimpleApplication implements ActionListener {
         //TODO: add render code
     }
     
-    private void setUpLight(){
+    private void initLight(){
         DirectionalLight sun1 = new DirectionalLight();
         sun1.setColor(ColorRGBA.White);
         sun1.setDirection(new Vector3f(1,0,0).normalizeLocal());
@@ -154,16 +146,16 @@ public class Main extends SimpleApplication implements ActionListener {
         rootNode.addLight(sun6);
     }
     
-    private void setUpSkyDome() {
+    private void initSkySphere() {
         Sphere skySphere = new Sphere(10, 10, 200, false, true);
-        Geometry skyDomeGeom = new Geometry("skyDome", skySphere);
-        Material skyDomeMat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
-        skyDomeMat.setTexture("DiffuseMap", assetManager.loadTexture("Textures/Sky_horiz_6-2048.jpg"));
-        skyDomeMat.setColor("Diffuse", ColorRGBA.White);
-        skyDomeGeom.setMaterial(skyDomeMat);
-        skyDomeGeom.setLocalTranslation(0, 0, 0);
-        skyDomeGeom.setLocalRotation(PITCH270);
-        rootNode.attachChild(skyDomeGeom);
+        Geometry skySphereGeom = new Geometry("skyDome", skySphere);
+        Material skySphereMat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
+        skySphereMat.setTexture("DiffuseMap", assetManager.loadTexture("Textures/Sky_horiz_6-2048.jpg"));
+        skySphereMat.setColor("Diffuse", ColorRGBA.White);
+        skySphereGeom.setMaterial(skySphereMat);
+        skySphereGeom.setLocalTranslation(0, 0, 0);
+        skySphereGeom.setLocalRotation(PITCH270);
+        rootNode.attachChild(skySphereGeom);
     }
 
     @Override
@@ -181,6 +173,19 @@ public class Main extends SimpleApplication implements ActionListener {
             case "Down":
                 downBtn = isPressed;
                 break;
+            
+            case "1":
+                ball.switchBall(BallChoice.Bowlingball);
+                break;
+            case "2":
+                ball.switchBall(BallChoice.Basketball);
+                break;
+            case "3":
+                ball.switchBall(BallChoice.Baseball);
+                break;
+            case "4":
+                ball.switchBall(BallChoice.Tennisball);
+                break;
         }
     }
         
@@ -193,6 +198,15 @@ public class Main extends SimpleApplication implements ActionListener {
         inputManager.addListener(this, "Up");
         inputManager.addMapping("Down", new KeyTrigger(KeyInput.KEY_S));
         inputManager.addListener(this, "Down");
+        
+        inputManager.addMapping("1", new KeyTrigger(KeyInput.KEY_1));
+        inputManager.addListener(this, "1");
+        inputManager.addMapping("2", new KeyTrigger(KeyInput.KEY_2));
+        inputManager.addListener(this, "2");
+        inputManager.addMapping("3", new KeyTrigger(KeyInput.KEY_3));
+        inputManager.addListener(this, "3");
+        inputManager.addMapping("4", new KeyTrigger(KeyInput.KEY_4));
+        inputManager.addListener(this, "4");
     }
     
     private void checkUserDropped(){
@@ -200,7 +214,68 @@ public class Main extends SimpleApplication implements ActionListener {
             rigidBall.setLinearVelocity(new Vector3f(0,0,0));
             rigidBall.setAngularVelocity(new Vector3f(0,0,0));
             rigidBall.setPhysicsLocation(new Vector3f(0, 1, 0));
-            failCounter++;
+            player.addRespawn();
         }
+    }
+    
+    private void initHudText(){
+        hudText = new BitmapText(guiFont);          
+        hudText.setSize(guiFont.getCharSet().getRenderedSize());
+        hudText.setColor(ColorRGBA.Blue);
+        hudText.setLocalTranslation(5, cam.getHeight() - 5, 0);
+        guiNode.attachChild(hudText);
+        
+        updateHudText();
+    }
+    public void updateHudText(){
+        hudText.setText("Player: " + player.getPlayerName() + "\nScore: " + player.getScore());
+    }
+    
+    private void initChaseCam(){
+        chaseCam = new ChaseCamera(cam, ball, this.inputManager);
+        chaseCam.setDefaultDistance(5);
+        chaseCam.setMinDistance(3);
+        chaseCam.setMaxDistance(10);
+        chaseCam.setDefaultHorizontalRotation((float)(90 * Math.PI / 180));
+        chaseCam.setInvertVerticalAxis(true);
+    }
+    
+    private void finishedReached(){
+        float distance = ball.getLocalTranslation().distance(finish.getLocalTranslation());
+        if (distance < finish.getRadius()){
+            rootNode.detachChild(ball);
+        }
+    }
+    
+    private void addCoins(){
+        Coin coin1 = new Coin(assetManager);
+        coin1.setLocalTranslation(0, 0.5f, -2);
+        rootNode.attachChild(coin1);
+        coins.add(coin1);
+    }
+    
+    private void checkCoins(float tpf){
+        for (int i = 0; i < coins.size(); i++){
+            coins.get(i).rotate(0, tpf, 0);
+            if (coins.get(i).getLocalTranslation().distance(ball.getLocalTranslation()) < 0.5f){
+                rootNode.detachChild(coins.get(i));
+                coins.remove(i);
+                player.addPoint();
+            }
+        }
+    }
+    
+    public void activateGame(String name){
+        player.setPlayerName(name);
+        initHudText();
+        rootNode.attachChild(ball);
+        bulletAppState.getPhysicsSpace().add(rigidBall);
+        chaseCam.setDragToRotate(false);
+        initKeys();
+    }
+    
+    public void setBallCollisionShapeRadius(float r){
+        rigidBall.setPhysicsLocation(rigidBall.getPhysicsLocation().add(0, r - ((SphereCollisionShape)rigidBall.getCollisionShape()).getRadius() + 0.05f, 0));
+        rigidBall.setCollisionShape(new SphereCollisionShape(r));
     }
 }

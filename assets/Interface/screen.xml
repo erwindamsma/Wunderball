@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nifty>
+    <useStyles filename="nifty-default-styles.xml" />
+    <useControls filename="nifty-default-controls.xml" />
+    <screen id="start" controller="mygame.MyStartScreen">
+        <layer id="background" backgroundColor="#000f"></layer>
+        <layer id="foreground" backgroundColor="#0000" childLayout="vertical">
+            <panel id="panel_1" height="25%" width="100%" align="center" childLayout="center" backgroundColor="#eeef">
+                <image filename="Interface/Wunderball.png"></image>
+            </panel>
+            <panel id="panel_2" height="35%" width="100%" align="center" childLayout="center" backgroundColor="#ffff">  
+                <image filename="Interface/Logo-NHL-hogeschool.png" valign="center" align="center" width="25%" height="82.76%"/>
+            </panel>
+            <panel id="panel_3" height="40%" width="100%" align="center" childLayout="center" backgroundColor="#eeef">
+                <control name="textfield" id="playername" maxLength="20" align="center" valign="top" width="200" marginTop="20px" textHAlign="center" text="player"/>
+                <control name="button" label="Start" id="StartButton" align="center" valign="top" width="200" height="50" marginTop="50px" visibleToMouse="true">
+                    <interact onClick="startGame()"/>
+                </control>
+            </panel>
+        </layer>
+    </screen>
+</nifty>

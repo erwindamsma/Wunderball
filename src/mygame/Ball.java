@@ -1,7 +1,6 @@
 package mygame;
 
 import com.jme3.asset.AssetManager;
-import com.jme3.collision.Collidable;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.scene.Geometry;
@@ -66,22 +65,22 @@ public class Ball extends Node {
     private void createBowlingball() {
         ballSphere.updateGeometry(50, 50, 0.3f);
         ballTexture = assetManager.loadTexture("Textures/bowlingball.png");
-        main.setBallCollisionShapeRadius(0.3f);
+        main.setBallCollisionShapeRadius(0.3f, 5f, 0f);
     }
     private void createBasketball(){
         ballSphere.updateGeometry(50, 50, 0.3f);
         ballTexture = assetManager.loadTexture("Textures/BasketballColor.jpg");
-        main.setBallCollisionShapeRadius(0.3f);
+        main.setBallCollisionShapeRadius(0.3f, 2f, 0.4f);
         
     }
     private void createBaseBall() {
         ballSphere.updateGeometry(50, 50, 0.1f);
         ballTexture = assetManager.loadTexture("Textures/SoftballColor.jpg");
-        main.setBallCollisionShapeRadius(0.1f);
+        main.setBallCollisionShapeRadius(0.1f, 0.8f, 0.05f);
     }
     private void createTennisball() {
         ballSphere.updateGeometry(50, 50, 0.1f);
         ballTexture = assetManager.loadTexture("Textures/TennisBallColorMap.jpg");
-        main.setBallCollisionShapeRadius(0.1f);
+        main.setBallCollisionShapeRadius(0.1f, 0.5f, 0.4f);
     }
 }

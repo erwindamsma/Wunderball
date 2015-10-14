@@ -4,7 +4,6 @@ import com.jme3.app.SimpleApplication;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.control.RigidBodyControl;
-import com.jme3.bullet.util.CollisionShapeFactory;
 import com.jme3.font.BitmapText;
 import com.jme3.input.ChaseCamera;
 import com.jme3.input.KeyInput;
@@ -19,7 +18,8 @@ import com.jme3.math.Vector3f;
 import com.jme3.niftygui.NiftyJmeDisplay;
 import com.jme3.renderer.RenderManager;
 import com.jme3.scene.Geometry;
-import com.jme3.scene.Node;
+import com.jme3.scene.Spatial;
+import com.jme3.scene.shape.Cylinder;
 import com.jme3.scene.shape.Sphere;
 import com.jme3.system.AppSettings;
 import de.lessvoid.nifty.Nifty;
@@ -29,15 +29,16 @@ import java.util.List;
 public class Main extends SimpleApplication implements ActionListener {
     
     public static final Quaternion PITCH270 = new Quaternion().fromAngleAxis(FastMath.PI*3/2, new Vector3f(1,0,0));
+    public static final Quaternion YAW270   = new Quaternion().fromAngleAxis(FastMath.PI*3/2, new Vector3f(0,1,0));
     
     private BulletAppState bulletAppState;
     private Nifty nifty;
     private BitmapText hudText;
+    private BitmapText debugText; //for xyz coords of the ball
     private ChaseCamera chaseCam;
     
     private Ball ball;
     private RigidBodyControl rigidBall;
-    private Finish finish;
     
     private List<Coin> coins = new ArrayList<>();
     
@@ -47,8 +48,17 @@ public class Main extends SimpleApplication implements ActionListener {
     private boolean downBtn = false;
     
     private Player player;
-    
+    private boolean isRunning = false;
     private static final int ballSpeed = 10;
+    
+    private List<Vector3f> coinLocations = new ArrayList<Vector3f>(){{
+        add(new Vector3f(0.8f, 0.2f, 0.8f));
+        add(new Vector3f(-0.8f, 0.2f, 0.8f));
+        add(new Vector3f(0.8f, 0.2f, -0.9f));
+        add(new Vector3f(-0.8f, 0.2f, -0.9f));
+        add(new Vector3f(0.167f, 0.25f, -5.9f));
+        add(new Vector3f(3.3f, -0.12f, -7.2f));
+    }};
     
     public static void main(String[] args) {
         Main app = new Main();
@@ -75,9 +85,11 @@ public class Main extends SimpleApplication implements ActionListener {
         nifty.fromXml("Interface/screen.xml", "start", new MyStartScreen(this, nifty));
         guiViewPort.addProcessor(niftyDisplay);
         
-        Node parcour = new Parcour(assetManager);
+        Spatial parcour = assetManager.loadModel("Models/parcour/parcour.j3o");
+        parcour.setLocalRotation(YAW270);
         RigidBodyControl rigidParcour = new RigidBodyControl(0);
         parcour.addControl(rigidParcour);
+        rigidParcour.setRestitution(1);
         rootNode.attachChild(parcour);
         bulletAppState.getPhysicsSpace().add(rigidParcour);
         
@@ -86,15 +98,12 @@ public class Main extends SimpleApplication implements ActionListener {
         ball = new Ball(assetManager, this);
         ball.setLocalTranslation(0, 1, 0);
         ball.addControl(rigidBall);
-        
-        finish = new Finish(assetManager);
-        finish.setLocalTranslation(0, 0.5f, -5);
-        rootNode.attachChild(finish);
 
         initLight();
         initSkySphere();
         initChaseCam();
-        addCoins();
+        initCoins();
+        initDebugText(); //for xyz coords of the ball
     }
 
     @Override
@@ -110,8 +119,9 @@ public class Main extends SimpleApplication implements ActionListener {
         if (downBtn) rigidBall.applyCentralForce(new Vector3f(x,0,y));
         
         checkUserDropped();
-        finishedReached();
+        checkFinished();
         checkCoins(tpf);
+        updateDebugText(); //for xyz coords of the ball
     }
 
     @Override
@@ -173,6 +183,9 @@ public class Main extends SimpleApplication implements ActionListener {
             case "Down":
                 downBtn = isPressed;
                 break;
+            case "Jump":
+                if (isPressed) rigidBall.applyCentralForce(new Vector3f(0,300,0));
+                break;
             
             case "1":
                 ball.switchBall(BallChoice.Bowlingball);
@@ -198,6 +211,8 @@ public class Main extends SimpleApplication implements ActionListener {
         inputManager.addListener(this, "Up");
         inputManager.addMapping("Down", new KeyTrigger(KeyInput.KEY_S));
         inputManager.addListener(this, "Down");
+        inputManager.addMapping("Jump", new KeyTrigger(KeyInput.KEY_SPACE));
+        inputManager.addListener(this, "Jump");
         
         inputManager.addMapping("1", new KeyTrigger(KeyInput.KEY_1));
         inputManager.addListener(this, "1");
@@ -227,8 +242,27 @@ public class Main extends SimpleApplication implements ActionListener {
         
         updateHudText();
     }
+    
     public void updateHudText(){
         hudText.setText("Player: " + player.getPlayerName() + "\nScore: " + player.getScore());
+    }
+    
+    private void initDebugText(){
+        debugText = new BitmapText(guiFont);
+        debugText.setSize(guiFont.getCharSet().getRenderedSize());
+        debugText.setColor(ColorRGBA.Blue);
+        debugText.setLocalTranslation(5, cam.getHeight() - 50, 0);
+        guiNode.attachChild(debugText);
+    }
+    
+    private void updateDebugText(){
+        String debugTextString = "X: ";
+        debugTextString += String.valueOf(rigidBall.getPhysicsLocation().getX());
+        debugTextString += "\nY: ";
+        debugTextString += String.valueOf(rigidBall.getPhysicsLocation().getY());
+        debugTextString += "\nZ: ";
+        debugTextString += String.valueOf(rigidBall.getPhysicsLocation().getZ());
+        debugText.setText(debugTextString);
     }
     
     private void initChaseCam(){
@@ -240,24 +274,33 @@ public class Main extends SimpleApplication implements ActionListener {
         chaseCam.setInvertVerticalAxis(true);
     }
     
-    private void finishedReached(){
-        float distance = ball.getLocalTranslation().distance(finish.getLocalTranslation());
-        if (distance < finish.getRadius()){
-            rootNode.detachChild(ball);
+    private void checkFinished(){
+        if (isRunning){
+            float distance = ball.getLocalTranslation().distance(new Vector3f(3.5f, -2.76f, -5.9f));
+            if (distance < ((SphereCollisionShape)rigidBall.getCollisionShape()).getRadius() + 0.5f){
+                isRunning = false;
+                rootNode.detachChild(ball);
+                new LeaderboardHandler().addScore(player.getPlayerName(), player.getScore());
+                nifty.fromXml("Interface/screen.xml", "end", new MyEndScreen(nifty));
+                
+            }
         }
     }
     
-    private void addCoins(){
-        Coin coin1 = new Coin(assetManager);
-        coin1.setLocalTranslation(0, 0.5f, -2);
-        rootNode.attachChild(coin1);
-        coins.add(coin1);
+    private void initCoins(){
+        for (Vector3f v : coinLocations){
+            Coin coin = new Coin(assetManager);
+            coin.setLocalTranslation(v);
+            rootNode.attachChild(coin);
+            coins.add(coin);
+        }
     }
     
     private void checkCoins(float tpf){
         for (int i = 0; i < coins.size(); i++){
             coins.get(i).rotate(0, tpf, 0);
-            if (coins.get(i).getLocalTranslation().distance(ball.getLocalTranslation()) < 0.5f){
+            float distance = ball.getLocalTranslation().distance(coins.get(i).getLocalTranslation());
+            if (distance < ((SphereCollisionShape)rigidBall.getCollisionShape()).getRadius() + ((Cylinder)((Geometry)coins.get(i).getChild(0)).getMesh()).getRadius() - 0.01f){
                 rootNode.detachChild(coins.get(i));
                 coins.remove(i);
                 player.addPoint();
@@ -266,6 +309,7 @@ public class Main extends SimpleApplication implements ActionListener {
     }
     
     public void activateGame(String name){
+        isRunning = true;
         player.setPlayerName(name);
         initHudText();
         rootNode.attachChild(ball);
@@ -274,8 +318,10 @@ public class Main extends SimpleApplication implements ActionListener {
         initKeys();
     }
     
-    public void setBallCollisionShapeRadius(float r){
+    public void setBallCollisionShapeRadius(float r, float mass, float bouncyness){
         rigidBall.setPhysicsLocation(rigidBall.getPhysicsLocation().add(0, r - ((SphereCollisionShape)rigidBall.getCollisionShape()).getRadius() + 0.05f, 0));
+        rigidBall.setMass(mass);
+        rigidBall.setRestitution(bouncyness);
         rigidBall.setCollisionShape(new SphereCollisionShape(r));
     }
 }

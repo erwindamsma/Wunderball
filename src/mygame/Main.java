@@ -318,7 +318,7 @@ public class Main extends SimpleApplication implements ActionListener {
         initKeys();
     }
     
-    public void setBallCollisionShapeRadius(float r, float mass, float bouncyness){
+    public void updateRigidBall(float r, float mass, float bouncyness){
         rigidBall.setPhysicsLocation(rigidBall.getPhysicsLocation().add(0, r - ((SphereCollisionShape)rigidBall.getCollisionShape()).getRadius() + 0.05f, 0));
         rigidBall.setMass(mass);
         rigidBall.setRestitution(bouncyness);

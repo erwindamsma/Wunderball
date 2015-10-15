@@ -65,22 +65,22 @@ public class Ball extends Node {
     private void createBowlingball() {
         ballSphere.updateGeometry(50, 50, 0.3f);
         ballTexture = assetManager.loadTexture("Textures/bowlingball.png");
-        main.setBallCollisionShapeRadius(0.3f, 5f, 0f);
+        main.updateRigidBall(0.3f, 5f, 0f);
     }
     private void createBasketball(){
         ballSphere.updateGeometry(50, 50, 0.3f);
         ballTexture = assetManager.loadTexture("Textures/BasketballColor.jpg");
-        main.setBallCollisionShapeRadius(0.3f, 2f, 0.4f);
+        main.updateRigidBall(0.3f, 2f, 0.4f);
         
     }
     private void createBaseBall() {
         ballSphere.updateGeometry(50, 50, 0.1f);
         ballTexture = assetManager.loadTexture("Textures/SoftballColor.jpg");
-        main.setBallCollisionShapeRadius(0.1f, 0.8f, 0.05f);
+        main.updateRigidBall(0.1f, 0.8f, 0.05f);
     }
     private void createTennisball() {
         ballSphere.updateGeometry(50, 50, 0.1f);
         ballTexture = assetManager.loadTexture("Textures/TennisBallColorMap.jpg");
-        main.setBallCollisionShapeRadius(0.1f, 0.5f, 0.4f);
+        main.updateRigidBall(0.1f, 0.5f, 0.4f);
     }
 }
